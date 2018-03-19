@@ -51,47 +51,43 @@ function extend (Y) {
         }
 
         const processMessage = () => {
-          let message
-          if (this._yConnectorOptions.decode) {
-            message = this._yConnectorOptions.decode(msg.data)
-          } else {
-            message = decode(msg.data)
-          }
+          const self = this
+          this._yConnectorOptions.decode(msg.data).then((message) => {
+            const proceed = () => {
+              const yMessage = decode(message.payload)
+              self.roomEmitter.emit('received message', msg.from, yMessage)
+              if (yMessage.type === null) { return }
+              self._queueReceiveMessage(msg.from, yMessage)
+            }
 
-          const proceed = () => {
-            const yMessage = decode(message.payload)
-            this.roomEmitter.emit('received message', msg.from, yMessage)
-            if (yMessage.type === null) { return }
-            this._queueReceiveMessage(msg.from, yMessage)
-          }
+            if (options.verifySignature) {
+              const sig = message.signature && Buffer.from(message.signature, 'base64')
+              options.verifySignature.call(
+                null,
+                msg.from,
+                Buffer.from(message.payload),
+                sig,
+                (err, valid) => {
+                  if (err) {
+                    console.error(
+                      'Error verifying signature from peer ' + msg.from +
+                      '. Discarding message.', err)
+                    return
+                  }
 
-          if (options.verifySignature) {
-            const sig = message.signature && Buffer.from(message.signature, 'base64')
-            options.verifySignature.call(
-              null,
-              msg.from,
-              Buffer.from(message.payload),
-              sig,
-              (err, valid) => {
-                if (err) {
-                  console.error(
-                    'Error verifying signature from peer ' + msg.from +
-                    '. Discarding message.', err)
-                  return
+                  if (!valid) {
+                    console.error(
+                      'Invalid signature from peer ' + msg.from +
+                      '. Discarding message.')
+                    return
+                  }
+                  proceed()
                 }
-
-                if (!valid) {
-                  console.error(
-                    'Invalid signature from peer ' + msg.from +
-                    '. Discarding message.')
-                  return
-                }
-                proceed()
-              }
-            )
-          } else {
-            proceed()
-          }
+              )
+            } else {
+              proceed()
+            }
+          })
         }
 
         if (!this._room.hasPeer(msg.from)) {
@@ -163,11 +159,11 @@ function extend (Y) {
         if (err) {
           throw err
         }
-        if (this._yConnectorOptions.encode) {
-          encodedMessage = this._yConnectorOptions.encode(encodedMessage)
-        }
-        this._room.sendTo(peer, encodedMessage)
-        this.roomEmitter.emit('sent message', peer, message)
+        const self = this
+        this._yConnectorOptions.encode(encodedMessage).then((em) => {
+          self._room.sendTo(peer, em)
+          self.roomEmitter.emit('sent message', peer, message)
+        })
       })
     }
     broadcast (message) {
@@ -175,11 +171,11 @@ function extend (Y) {
         if (err) {
           throw err
         }
-        if (this._yConnectorOptions.encode) {
-          encodedMessage = this._yConnectorOptions.encode(encodedMessage)
-        }
-        this._room.broadcast(encodedMessage)
-        this.roomEmitter.emit('sent message', 'broadcast', message)
+        const self = this
+        this._yConnectorOptions.encode(encodedMessage).then((em) => {
+          self._room.broadcast(em)
+          self.roomEmitter.emit('sent message', 'broadcast', message)
+        })
       })
     }
     isDisconnected () {
