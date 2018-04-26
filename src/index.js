@@ -28,6 +28,9 @@ function extend (Y) {
 
       this._yConnectorOptions = options
 
+      this.externalEncode = options.encode || (async (data) => data)
+      this.externalDecode = options.decode || (async (data) => data)
+
       this.ipfs = options.ipfs
 
       const topic = this.ipfsPubSubTopic = 'y-ipfs:rooms:' + options.room
@@ -52,7 +55,7 @@ function extend (Y) {
 
         const processMessage = () => {
           const self = this
-          this._yConnectorOptions.decode(msg.data).then((message) => {
+          this.externalDecode(msg.data).then((message) => {
             const proceed = () => {
               const yMessage = decode(message.payload)
               self.roomEmitter.emit('received message', msg.from, yMessage)
@@ -160,7 +163,7 @@ function extend (Y) {
           throw err
         }
         const self = this
-        this._yConnectorOptions.encode(encodedMessage).then((em) => {
+        this.externalEncode(encodedMessage).then((em) => {
           self._room.sendTo(peer, em)
           self.roomEmitter.emit('sent message', peer, message)
         })
@@ -172,7 +175,7 @@ function extend (Y) {
           throw err
         }
         const self = this
-        this._yConnectorOptions.encode(encodedMessage).then((em) => {
+        this.externalEncode(encodedMessage).then((em) => {
           self._room.broadcast(em)
           self.roomEmitter.emit('sent message', 'broadcast', message)
         })
